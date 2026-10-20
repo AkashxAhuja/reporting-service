@@ -1,5 +1,13 @@
-package com.akash.reporting.report;
+package com.akash.reporting.service;
 
+import com.akash.reporting.config.ReportProperties;
+import com.akash.reporting.dto.CreateReportRequest;
+import com.akash.reporting.exception.InvalidReportRequestException;
+import com.akash.reporting.exception.ReportNotFoundException;
+import com.akash.reporting.model.ReportJob;
+import com.akash.reporting.model.DispatchMetadata;
+import com.akash.reporting.model.ReportStatus;
+import com.akash.reporting.repository.ReportJobRepository;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -42,7 +50,8 @@ public class ReportService {
                 null,
                 null,
                 0,
-                true);
+                true,
+                DispatchMetadata.pending());
 
         // A single insert stores both the job and the intention to dispatch it.
         return repository.insert(job);

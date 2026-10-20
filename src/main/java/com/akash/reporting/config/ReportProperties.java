@@ -1,4 +1,4 @@
-package com.akash.reporting.report;
+package com.akash.reporting.config;
 
 import jakarta.validation.constraints.Min;
 import org.springframework.boot.context.properties.ConfigurationProperties;

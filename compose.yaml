@@ -13,5 +13,25 @@ services:
       timeout: 5s
       retries: 12
 
+  rabbitmq:
+    image: rabbitmq:4.4.0-management
+    hostname: reporting-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-reporting}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-reporting-local}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-reporting}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
 volumes:
   mongo-data:
+  rabbitmq-data:

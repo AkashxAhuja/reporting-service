@@ -2,7 +2,7 @@
 
 ## Scope and assumptions
 
-This milestone implements the acceptance boundary of the [HLD](high-level-design.md): a request is validated and durably recorded before returning `202`. It also implements retrieval of the saved job. The dispatcher and worker are not implemented yet; every accepted job remains queued.
+Milestone 1 implements the acceptance boundary of the [HLD](high-level-design.md): a request is validated and durably recorded before returning `202`. It also implements retrieval of the saved job. [Milestone 2](job-dispatch.md) adds dispatch to RabbitMQ; every job remains queued until a worker is introduced.
 
 - A report is a CSV export selected by a date range. The client cannot submit arbitrary columns, filters, SQL, or output formats.
 - `startDate` is inclusive; `endDate` is exclusive. Dates are converted to UTC instants before persistence, independently of the machine's timezone.
@@ -48,11 +48,12 @@ firstStartedAt   null / absent until processing starts
 completedAt      null / absent until terminal completion
 attemptCount     0
 dispatchPending  true
+dispatch         initial dispatch metadata, with attemptCount=0
 ```
 
 The API derives `retryCount = max(0, attemptCount - 1)`. Neither polling nor future scheduling yields count as execution attempts. The retry implementation will define precisely when attempts begin.
 
-The lifecycle vocabulary is `QUEUED`, `RUNNING`, `RETRYING`, `COMPLETED`, and `FAILED`. Only initial `QUEUED` creation is implemented. Leases, attempt tokens, checkpoints, output references, and conditional processing transitions belong to subsequent milestones.
+The lifecycle vocabulary is `QUEUED`, `RUNNING`, `RETRYING`, `COMPLETED`, and `FAILED`. Only initial `QUEUED` creation is implemented. Milestone 2 adds dispatch leases and claim tokens, separate from future worker leases, attempt tokens, checkpoints, output references, and processing transitions.
 
 ## Submission and durability
 

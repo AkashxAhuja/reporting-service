@@ -1,4 +1,4 @@
-package com.akash.reporting.report;
+package com.akash.reporting.exception;
 
 public class ReportNotFoundException extends RuntimeException {
 

@@ -1,11 +1,13 @@
-package com.akash.reporting.report;
+package com.akash.reporting.model;
 
 import java.time.Instant;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.TypeAlias;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document("report_jobs")
+@TypeAlias("report-job")
 public record ReportJob(
         @Id String id,
         Instant startInclusive,
@@ -16,5 +18,6 @@ public record ReportJob(
         Instant firstStartedAt,
         Instant completedAt,
         int attemptCount,
-        boolean dispatchPending) {
+        boolean dispatchPending,
+        DispatchMetadata dispatch) {
 }

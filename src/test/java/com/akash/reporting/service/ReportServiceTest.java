@@ -1,5 +1,11 @@
-package com.akash.reporting.report;
+package com.akash.reporting.service;
 
+import com.akash.reporting.config.ReportProperties;
+import com.akash.reporting.dto.CreateReportRequest;
+import com.akash.reporting.exception.InvalidReportRequestException;
+import com.akash.reporting.model.ReportJob;
+import com.akash.reporting.model.ReportStatus;
+import com.akash.reporting.repository.ReportJobRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -49,6 +55,7 @@ class ReportServiceTest {
         assertThat(result.status()).isEqualTo(ReportStatus.QUEUED);
         assertThat(result.format()).isEqualTo("CSV");
         assertThat(result.dispatchPending()).isTrue();
+        assertThat(result.dispatch().attemptCount()).isZero();
         assertThat(result.attemptCount()).isZero();
         assertThat(result.firstStartedAt()).isNull();
         assertThat(result.completedAt()).isNull();

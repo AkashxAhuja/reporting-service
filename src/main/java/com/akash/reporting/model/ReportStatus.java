@@ -1,4 +1,4 @@
-package com.akash.reporting.report;
+package com.akash.reporting.model;
 
 public enum ReportStatus {
     QUEUED,

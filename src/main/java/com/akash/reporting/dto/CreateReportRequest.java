@@ -1,4 +1,4 @@
-package com.akash.reporting.report;
+package com.akash.reporting.dto;
 
 import java.time.LocalDate;
 

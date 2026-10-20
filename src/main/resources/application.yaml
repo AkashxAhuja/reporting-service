@@ -3,6 +3,15 @@ spring:
     name: reporting-service
   mongodb:
     uri: ${MONGODB_URI:mongodb://localhost:27017/reporting?serverSelectionTimeoutMS=3000&connectTimeoutMS=2000&socketTimeoutMS=10000}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:reporting}
+    password: ${RABBITMQ_PASSWORD:reporting-local}
+    virtual-host: ${RABBITMQ_VHOST:reporting}
+    connection-timeout: 3s
+    channel-rpc-timeout: 5s
+    requested-heartbeat: 10s
   jackson:
     deserialization:
       fail-on-unknown-properties: true
@@ -14,3 +23,13 @@ server:
 reporting:
   reports:
     max-range-days: ${REPORT_MAX_RANGE_DAYS:731}
+  dispatch:
+    enabled: ${REPORT_DISPATCH_ENABLED:true}
+    poll-interval: ${REPORT_DISPATCH_POLL_INTERVAL:1s}
+    lease-duration: ${REPORT_DISPATCH_LEASE_DURATION:30s}
+    confirm-timeout: ${REPORT_DISPATCH_CONFIRM_TIMEOUT:5s}
+    retry-delay: ${REPORT_DISPATCH_RETRY_DELAY:5s}
+    batch-size: ${REPORT_DISPATCH_BATCH_SIZE:10}
+    exchange: ${REPORT_DISPATCH_EXCHANGE:reporting.reports}
+    queue: ${REPORT_DISPATCH_QUEUE:reporting.reports.jobs}
+    routing-key: ${REPORT_DISPATCH_ROUTING_KEY:report.requested}

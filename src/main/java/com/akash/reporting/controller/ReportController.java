@@ -1,5 +1,8 @@
-package com.akash.reporting.report;
+package com.akash.reporting.controller;
 
+import com.akash.reporting.dto.CreateReportRequest;
+import com.akash.reporting.dto.ReportResponse;
+import com.akash.reporting.service.ReportService;
 import java.net.URI;
 import java.util.UUID;
 

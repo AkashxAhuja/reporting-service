@@ -1,5 +1,11 @@
-package com.akash.reporting.report;
+package com.akash.reporting.controller;
 
+import com.akash.reporting.exception.InvalidReportRequestException;
+import com.akash.reporting.exception.ReportNotFoundException;
+import com.akash.reporting.model.ReportJob;
+import com.akash.reporting.model.DispatchMetadata;
+import com.akash.reporting.model.ReportStatus;
+import com.akash.reporting.service.ReportService;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -126,6 +132,6 @@ class ReportControllerTest {
         return new ReportJob(REPORT_ID.toString(),
                 Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-02T00:00:00Z"),
                 "CSV", ReportStatus.QUEUED, Instant.parse("2026-10-19T08:00:00Z"),
-                null, null, 0, true);
+                null, null, 0, true, DispatchMetadata.pending());
     }
 }

@@ -1,5 +1,7 @@
-package com.akash.reporting.report;
+package com.akash.reporting.dto;
 
+import com.akash.reporting.model.ReportJob;
+import com.akash.reporting.model.ReportStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -17,7 +19,7 @@ public record ReportResponse(
         int retryCount,
         String statusUrl) {
 
-    static ReportResponse from(ReportJob job) {
+    public static ReportResponse from(ReportJob job) {
         return new ReportResponse(
                 job.id(),
                 job.startInclusive().atOffset(ZoneOffset.UTC).toLocalDate(),
