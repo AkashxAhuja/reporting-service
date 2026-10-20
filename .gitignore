@@ -5,3 +5,11 @@
 .env
 .env.*
 !.env.example
+
+# Maven build output
+target/
+
+# IDE metadata
+.idea/
+*.iml
+.vscode/

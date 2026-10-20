@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: reporting-service
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/reporting?serverSelectionTimeoutMS=3000&connectTimeoutMS=2000&socketTimeoutMS=10000}
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+server:
+  address: 127.0.0.1
+  port: ${PORT:8080}
+
+reporting:
+  reports:
+    max-range-days: ${REPORT_MAX_RANGE_DAYS:731}
