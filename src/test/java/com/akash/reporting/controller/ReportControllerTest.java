@@ -42,6 +42,9 @@ class ReportControllerTest {
     @MockitoBean
     private ReportService service;
 
+    @MockitoBean
+    private com.akash.reporting.service.ReportDownloadService downloads;
+
     @Test
     void returnsAcceptedWithStatusLocationAndInitialMetadata() throws Exception {
         when(service.create(any())).thenReturn(queuedJob());
@@ -128,10 +131,28 @@ class ReportControllerTest {
                         "Report metadata storage is unavailable. The operation could not be confirmed."));
     }
 
+    @Test
+    void returnsSignedDownloadWithNoStore() throws Exception {
+        var expires = Instant.parse("2026-10-20T00:05:00Z");
+        when(downloads.download(REPORT_ID)).thenReturn(new com.akash.reporting.dto.ReportDownloadResponse(
+                java.net.URI.create("http://localhost:8333/reports/file.csv?signature=example"), expires, "report.csv"));
+        mvc.perform(get("/api/v1/reports/{id}/download", REPORT_ID))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.fileName").value("report.csv"));
+    }
+
+    @Test
+    void unavailableDownloadIsConflictAndUnknownDownloadIsNotFound() throws Exception {
+        when(downloads.download(REPORT_ID)).thenThrow(new com.akash.reporting.exception.ReportNotReadyException());
+        mvc.perform(get("/api/v1/reports/{id}/download", REPORT_ID)).andExpect(status().isConflict());
+        org.mockito.Mockito.doThrow(new ReportNotFoundException()).when(downloads).download(REPORT_ID);
+        mvc.perform(get("/api/v1/reports/{id}/download", REPORT_ID)).andExpect(status().isNotFound());
+    }
+
     private ReportJob queuedJob() {
         return new ReportJob(REPORT_ID.toString(),
                 Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-02T00:00:00Z"),
                 "CSV", ReportStatus.QUEUED, Instant.parse("2026-10-19T08:00:00Z"),
-                null, null, 0, true, DispatchMetadata.pending());
+                null, null, 0, true, DispatchMetadata.pending(), null, null, null);
     }
 }

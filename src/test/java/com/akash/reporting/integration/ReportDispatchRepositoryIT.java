@@ -140,6 +140,6 @@ class ReportDispatchRepositoryIT {
 
     private ReportJob insertJob(ReportStatus status) {
         return mongo.insert(new ReportJob(UUID.randomUUID().toString(), NOW.minusSeconds(86400), NOW,
-                "CSV", status, NOW, null, null, 0, true, DispatchMetadata.pending()));
+                "CSV", status, NOW, null, null, 0, true, DispatchMetadata.pending(), null, null, null));
     }
 }

@@ -18,7 +18,7 @@ spring:
 
 server:
   address: 127.0.0.1
-  port: ${PORT:8080}
+  port: ${PORT:8081}
 
 reporting:
   reports:
@@ -33,3 +33,24 @@ reporting:
     exchange: ${REPORT_DISPATCH_EXCHANGE:reporting.reports}
     queue: ${REPORT_DISPATCH_QUEUE:reporting.reports.jobs}
     routing-key: ${REPORT_DISPATCH_ROUTING_KEY:report.requested}
+
+  worker:
+    enabled: ${REPORT_WORKER_ENABLED:true}
+    batch-size: ${REPORT_WORKER_BATCH_SIZE:500}
+    lease-duration: 60s
+    heartbeat-interval: 10s
+    max-duration: ${REPORT_WORKER_MAX_DURATION:10m}
+    query-timeout-seconds: 30
+    jdbc-url: ${REPORT_MYSQL_URL:jdbc:mysql://localhost:3306/reporting_source}
+    username: ${REPORT_MYSQL_USERNAME:report_reader}
+    password: ${REPORT_MYSQL_PASSWORD:report-reader-local}
+  storage:
+    endpoint: ${REPORT_S3_ENDPOINT:http://localhost:8333}
+    region: ${REPORT_S3_REGION:us-east-1}
+    bucket: ${REPORT_S3_BUCKET:reporting-exports}
+    access-key: ${REPORT_S3_ACCESS_KEY:reporting}
+    secret-key: ${REPORT_S3_SECRET_KEY:reporting-local-storage}
+    path-style: ${REPORT_S3_PATH_STYLE:true}
+    part-size-bytes: 8388608
+    max-output-bytes: ${REPORT_MAX_OUTPUT_BYTES:53687091200}
+    download-ttl: 5m

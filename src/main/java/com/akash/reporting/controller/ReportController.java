@@ -2,6 +2,8 @@ package com.akash.reporting.controller;
 
 import com.akash.reporting.dto.CreateReportRequest;
 import com.akash.reporting.dto.ReportResponse;
+import com.akash.reporting.dto.ReportDownloadResponse;
+import com.akash.reporting.service.ReportDownloadService;
 import com.akash.reporting.service.ReportService;
 import java.net.URI;
 import java.util.UUID;
@@ -22,8 +24,16 @@ public class ReportController {
 
     private final ReportService service;
 
-    public ReportController(ReportService service) {
+    private final ReportDownloadService downloads;
+
+    public ReportController(ReportService service, ReportDownloadService downloads) {
         this.service = service;
+        this.downloads = downloads;
+    }
+
+    @GetMapping("/{reportId}/download")
+    public ResponseEntity<ReportDownloadResponse> download(@PathVariable UUID reportId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(downloads.download(reportId));
     }
 
     @PostMapping

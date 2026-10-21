@@ -19,5 +19,8 @@ public record ReportJob(
         Instant completedAt,
         int attemptCount,
         boolean dispatchPending,
-        DispatchMetadata dispatch) {
+        DispatchMetadata dispatch,
+        WorkerMetadata worker,
+        ReportArtifact artifact,
+        ReportFailure failure) {
 }

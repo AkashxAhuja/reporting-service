@@ -17,7 +17,11 @@ public record ReportResponse(
         Instant completedAt,
         int attemptCount,
         int retryCount,
-        String statusUrl) {
+        String statusUrl,
+        Long rowCount,
+        Long byteSize,
+        String downloadUrl,
+        com.akash.reporting.model.ReportFailure failure) {
 
     public static ReportResponse from(ReportJob job) {
         return new ReportResponse(
@@ -31,6 +35,10 @@ public record ReportResponse(
                 job.completedAt(),
                 job.attemptCount(),
                 Math.max(0, job.attemptCount() - 1),
-                "/api/v1/reports/" + job.id());
+                "/api/v1/reports/" + job.id(),
+                job.artifact() == null ? null : job.artifact().rowCount(),
+                job.artifact() == null ? null : job.artifact().byteSize(),
+                job.status() == ReportStatus.COMPLETED ? "/api/v1/reports/" + job.id() + "/download" : null,
+                job.failure());
     }
 }

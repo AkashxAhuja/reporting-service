@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({ReportProperties.class, DispatchProperties.class})
+@EnableConfigurationProperties({ReportProperties.class, DispatchProperties.class, WorkerProperties.class, StorageProperties.class})
 public class ApplicationConfiguration {
 
     @Bean

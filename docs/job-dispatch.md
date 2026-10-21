@@ -1,5 +1,7 @@
 # Milestone 2: recoverable dispatch to RabbitMQ
 
+This document records milestone 2 with worker processing disabled. Milestone 3 adds an opt-in consumer and CSV downloads; see [the current generation guide](report-generation.md).
+
 ## Behavior
 
 Milestone 1's POST and GET contracts remain unchanged. POST saves a queued job plus its pending-dispatch marker and returns `202` after MongoDB acknowledges the insert. A background dispatcher publishes the job ID to RabbitMQ. A successful publish does not mean a worker has started: status remains `QUEUED`, worker `attemptCount` and API `retryCount` remain zero, and processing timestamps remain unset.

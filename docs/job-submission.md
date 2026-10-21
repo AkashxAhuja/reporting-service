@@ -1,5 +1,7 @@
 # Durable job submission: first milestone LLD
 
+This document records milestone 1. Milestone 3 adds generation and a download endpoint; see [the current generation guide](report-generation.md).
+
 ## Scope and assumptions
 
 Milestone 1 implements the acceptance boundary of the [HLD](high-level-design.md): a request is validated and durably recorded before returning `202`. It also implements retrieval of the saved job. [Milestone 2](job-dispatch.md) adds dispatch to RabbitMQ; every job remains queued until a worker is introduced.
@@ -20,7 +22,7 @@ Milestone 1 implements the acceptance boundary of the [HLD](high-level-design.md
 
 Responses use `Cache-Control: no-store`. Application errors use HTTP Problem Details (`application/problem+json`). Field validation errors include an `errors` map. Internal database details are logged on the server and excluded from error responses.
 
-There is no download route yet. Repeating POST creates a new job; request idempotency is a later addition.
+At milestone 1 there was no download route. Repeating POST creates a new job; request idempotency is a later addition.
 
 ## Components
 

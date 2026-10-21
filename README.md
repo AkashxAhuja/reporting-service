@@ -4,7 +4,7 @@ A reporting service for concurrent date-range requests over a single MySQL table
 
 The [high-level design](docs/high-level-design.md) describes the proposed architecture. The [Mermaid source](docs/diagrams/reporting-service.mmd) remains editable. The [submission LLD](docs/job-submission.md) covers milestone 1, and the [dispatch LLD and local test guide](docs/job-dispatch.md) covers milestone 2.
 
-Current stage: **durable submission, status retrieval, and recoverable RabbitMQ dispatch**. A background dispatcher claims pending MongoDB jobs and publishes their IDs to a durable queue. Accepted jobs remain `QUEUED`; report generation and downloads follow in milestone 3.
+Current stage: **end-to-end CSV generation and downloading**. A worker consumes RabbitMQ jobs, reads MySQL in bounded batches, uploads CSV to S3-compatible storage, and saves completion in MongoDB. The [milestone 3 implementation and local test guide](docs/report-generation.md) covers the full flow, package responsibilities, failure behavior, GUI access and commands.
 
 ## Run locally
 
@@ -13,16 +13,16 @@ Requirements: Java 21 and Docker with Docker Compose. On macOS, Colima provides 
 ```sh
 colima start --runtime docker --vm-type vz --cpu 2 --memory 4 --disk 20
 docker context use colima
-docker pull rabbitmq:4.4.0-management
-docker compose up -d --wait mongo rabbitmq
-./mvnw clean spring-boot:run
+docker compose pull
+docker compose up -d --wait mongo rabbitmq mysql storage
+REPORT_WORKER_ENABLED=true ./mvnw clean spring-boot:run
 ```
 
-The API listens on `127.0.0.1:8080`. MongoDB and RabbitMQ expose their ports only on loopback and use named volumes. Stopping containers or running `docker compose down` preserves their volumes. The clean build removes stale classes from the milestone 1 package layout. Stop the old application process before starting the updated application.
+The API listens on `127.0.0.1:8080`. MongoDB, RabbitMQ, MySQL and SeaweedFS expose their ports only on loopback and use named volumes. Worker processing defaults to disabled; enable exactly one local worker with the command above. Stopping containers or running `docker compose down` preserves their volumes. The clean build removes stale classes from the milestone 1 package layout. Stop the old application process before starting the updated application.
 
 For an existing MongoDB or RabbitMQ server, configure the connection settings below. Neither server requires a native macOS installation when using the supplied containers.
 
-RabbitMQ's GUI is at [http://localhost:15672](http://localhost:15672). Sign in with username **reporting** and password **reporting-local**, select virtual host **reporting**, then open **Queues and Streams → reporting.reports.jobs** after submitting a report. The queue is declared when the application first connects to publish. Messages remain ready because no worker consumes them yet. For payload inspection, select a requeue-enabled option under **Get messages**.
+RabbitMQ's GUI is at [http://localhost:15672](http://localhost:15672). Sign in with username **reporting** and password **reporting-local**, select virtual host **reporting**, then open **Queues and Streams → reporting.reports.jobs** after submitting a report. The queue is declared when the application first connects to publish. With the worker enabled, messages are consumed and reports move through RUNNING to COMPLETED or FAILED. For payload inspection, select a requeue-enabled option under **Get messages**.
 
 The full [milestone 2 guide](docs/job-dispatch.md) includes service checks, MongoDB inspection, outage/restart testing, logs, and shutdown commands.
 
@@ -46,7 +46,11 @@ The response is `202 Accepted`, with a `Location` header and a body like:
   "completedAt": null,
   "attemptCount": 0,
   "retryCount": 0,
-  "statusUrl": "/api/v1/reports/778048b2-3b55-4318-b8d1-a7dc4225bc2b"
+  "statusUrl": "/api/v1/reports/778048b2-3b55-4318-b8d1-a7dc4225bc2b",
+  "rowCount": null,
+  "byteSize": null,
+  "downloadUrl": null,
+  "failure": null
 }
 ```
 
@@ -56,7 +60,7 @@ Use the returned ID to retrieve the saved job:
 curl -i http://localhost:8080/api/v1/reports/REPLACE_WITH_REPORT_ID
 ```
 
-The dispatcher normally publishes within a polling interval. In MongoDB, `dispatchPending` changes from `true` to `false` after a routed publication is confirmed, and `dispatch.publishedAt` is recorded. The GET response still reports `QUEUED` because a worker has not started processing. Starting the updated application also dispatches pending jobs created during milestone 1.
+The dispatcher normally publishes within a polling interval. In MongoDB, `dispatchPending` changes from `true` to `false` after a routed publication is confirmed, and `dispatch.publishedAt` is recorded. With an enabled worker, GET eventually reports `COMPLETED` with row count, byte size and a download endpoint. Without a worker, jobs remain `QUEUED`. Starting the updated application also dispatches pending jobs created during milestone 1.
 
 ## Configuration
 
@@ -68,7 +72,7 @@ The dispatcher normally publishes within a polling interval. In MongoDB, `dispat
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` | `localhost` / `5672` | AMQP broker address. Port 15672 is for the management UI. |
 | `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `reporting` / `reporting-local` | Local development credentials. |
 | `RABBITMQ_VHOST` | `reporting` | Broker virtual host created by Compose. |
-| `REPORT_DISPATCH_ENABLED` | `true` | Enable the dispatcher; `false` runs the milestone 1 APIs alone. |
+| `REPORT_DISPATCH_ENABLED` | `true` | Enable the dispatcher; `false` disables publication; worker activation is controlled separately. |
 | `REPORT_DISPATCH_POLL_INTERVAL` | `1s` | Delay between completed polling cycles. |
 | `REPORT_DISPATCH_LEASE_DURATION` | `30s` | Duration of a dispatch claim before another instance can reclaim it. |
 | `REPORT_DISPATCH_CONFIRM_TIMEOUT` | `5s` | Maximum wait for a broker confirmation after sending. Must be shorter than the lease. |
@@ -90,10 +94,10 @@ Service, MVC, publisher, dispatcher, and configuration tests run without externa
 ./mvnw clean test
 ```
 
-Integration tests require MongoDB and RabbitMQ and start application instances on ephemeral HTTP ports:
+Integration tests require MongoDB, RabbitMQ, MySQL and the S3-compatible store and start application instances on ephemeral HTTP ports:
 
 ```sh
-docker compose up -d --wait mongo rabbitmq
+docker compose up -d --wait mongo rabbitmq mysql storage
 ./mvnw -Pintegration clean verify
 ```
 
@@ -109,12 +113,18 @@ Production classes live under `com.akash.reporting`:
 | `dto` | API request/response objects and the queue message contract. |
 | `model` | Persistent report and dispatch metadata. |
 | `repository` | Job persistence, atomic dispatch claims, and guarded updates. |
-| `service` | Submission and dispatch orchestration. |
-| `messaging` | Persistent JSON publication and confirm/return handling. |
+| `service` | Submission, dispatch, worker lifecycle and downloading. |
+| `export` | Bounded CSV writing. |
+| `storage` | S3 multipart uploads, cleanup and signed URLs. |
+| `messaging` | Persistent publication, confirms/returns and manual-ack consumption. |
 | `scheduler` | Periodic dispatch trigger. |
 | `config` | Validated settings, UTC clock, write concerns, and broker topology. |
 | `exception` | Application exceptions and HTTP error mapping. |
 
+## Milestone 3 review and testing
+
+Follow [the generation guide](docs/report-generation.md) to submit the seeded October 1 report (five rows), poll completion, fetch a signed download URL, and inspect MySQL/MongoDB/RabbitMQ/stored files. Additional configuration is documented there. Tests use the dedicated local source fixture; do not run worker integration tests against a shared source database.
+
 ## Next milestone
 
-Add the report worker, bounded MySQL queries, CSV output, local S3-compatible storage, and the download endpoint. The worker must tolerate repeated messages for the same `reportId`; this milestone provides at-least-once publication.
+Milestone 4 adds durable checkpoints/resume, bounded delayed worker retries, DLQ handling, and reconciliation/cleanup for abandoned attempts. Global query coordination and fairness follow. Authentication and ownership remain required before exposing this local development API.

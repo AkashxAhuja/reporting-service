@@ -31,6 +31,11 @@ public class ReportExceptionHandler extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 
+    @ExceptionHandler(ReportNotReadyException.class)
+    ProblemDetail notReady(ReportNotReadyException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+    }
+
     @ExceptionHandler(DataAccessException.class)
     ProblemDetail storageUnavailable(DataAccessException exception) {
         log.error("Report metadata operation failed", exception);

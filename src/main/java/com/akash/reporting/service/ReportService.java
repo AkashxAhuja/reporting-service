@@ -51,7 +51,7 @@ public class ReportService {
                 null,
                 0,
                 true,
-                DispatchMetadata.pending());
+                DispatchMetadata.pending(), null, null, null);
 
         // A single insert stores both the job and the intention to dispatch it.
         return repository.insert(job);

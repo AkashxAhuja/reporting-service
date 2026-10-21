@@ -32,6 +32,47 @@ services:
       retries: 24
       start_period: 20s
 
+  mysql:
+    image: mysql:8.4.8
+    environment:
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_ROOT_PASSWORD: reporting-root-local
+      MYSQL_DATABASE: reporting_source
+      TZ: UTC
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./dev/mysql:/docker-entrypoint-initdb.d:ro
+    command: ["--innodb-buffer-pool-size=128M", "--max-connections=20"]
+    healthcheck:
+      test: ["CMD", "mysql", "--protocol=TCP", "-h127.0.0.1", "-ureport_reader", "-preport-reader-local", "reporting_source", "-e", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  storage:
+    image: chrislusf/seaweedfs:4.48
+    command: mini -dir=/data
+    environment:
+      AWS_ACCESS_KEY_ID: reporting
+      AWS_SECRET_ACCESS_KEY: reporting-local-storage
+      S3_BUCKET: reporting-exports
+    ports:
+      - "127.0.0.1:8333:8333"
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8888/"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
 volumes:
   mongo-data:
   rabbitmq-data:
+  mysql-data:
+  storage-data:
