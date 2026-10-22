@@ -44,8 +44,7 @@ public class ReportJobListener {
         }
         if (acknowledge) channel.basicAck(tag, false);
         else {
-            // Basic bounded-rate redelivery while Mongo is unavailable or an earlier lease remains active.
-            // Delayed retry queues, retry budgets, and DLQ are milestone 4.
+            // Pause briefly before requeueing an unconfirmed outcome.
             try { Thread.sleep(1000); }
             catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
             channel.basicNack(tag, false, true);

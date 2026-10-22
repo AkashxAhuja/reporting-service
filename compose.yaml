@@ -43,7 +43,7 @@ services:
       - "127.0.0.1:3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./dev/mysql:/docker-entrypoint-initdb.d:ro
+      - ./docker/mysql:/docker-entrypoint-initdb.d:ro
     command: ["--innodb-buffer-pool-size=128M", "--max-connections=20"]
     healthcheck:
       test: ["CMD", "mysql", "--protocol=TCP", "-h127.0.0.1", "-ureport_reader", "-preport-reader-local", "reporting_source", "-e", "SELECT 1"]

@@ -1,30 +1,50 @@
-# Reporting service
+# Reporting Service
 
-A reporting service for concurrent date-range requests over a single MySQL table containing approximately 200 million rows across two years.
+An asynchronous service that accepts a date range, generates a CSV from a single MySQL table, and provides a temporary download URL. MongoDB stores job status, RabbitMQ queues work, and S3 stores completed files.
 
-The [high-level design](docs/high-level-design.md) describes the proposed architecture. The [Mermaid source](docs/diagrams/reporting-service.mmd) remains editable. The [submission LLD](docs/job-submission.md) covers milestone 1, and the [dispatch LLD and local test guide](docs/job-dispatch.md) covers milestone 2.
+The design targets a table with 200 million records across two years, using the existing infrastructure and a small number of service instances. Completion time depends on the requested data, queued work and available database capacity.
 
-Current stage: **end-to-end CSV generation and downloading**. A worker consumes RabbitMQ jobs, reads MySQL in bounded batches, uploads CSV to S3-compatible storage, and saves completion in MongoDB. The [milestone 3 implementation and local test guide](docs/report-generation.md) covers the full flow, package responsibilities, failure behavior, GUI access and commands.
+## Design
+
+- [High-level design](docs/HLD.md): architecture, deployment roles and design decisions.
+- [Low-level design](docs/LLD.md): classes, APIs, data model, queries and failure handling.
 
 ## Run locally
 
-Requirements: Java 21 and Docker with Docker Compose. On macOS, Colima provides the Docker runtime from the command line. The Maven wrapper downloads Maven 3.9.16 on first use. The application uses Spring Boot 4.1.1, MongoDB 8.0.20, and RabbitMQ 4.4.0 with its management UI.
+Requirements: Java 21 and Docker with Docker Compose. The Maven wrapper downloads Maven on first use. On macOS, Colima can provide the Docker runtime without Docker Desktop:
 
 ```sh
 colima start --runtime docker --vm-type vz --cpu 2 --memory 4 --disk 20
 docker context use colima
-docker compose pull
+```
+
+From the project root, start dependencies and the application:
+
+```sh
 docker compose up -d --wait mongo rabbitmq mysql storage
 ./mvnw clean spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-The API in the local role listens on `127.0.0.1:8081`. MongoDB, RabbitMQ, MySQL and SeaweedFS expose their ports only on loopback and use named volumes. A plain startup defaults to the `api` role with generation disabled. The command above selects `local`, which runs one API, dispatcher and worker together. For separate instances, use the [deployment roles guide](docs/deployment-roles.md). Stopping containers or running `docker compose down` preserves their volumes. The clean build removes stale classes from the milestone 1 package layout. Stop the old application process before starting the updated application.
+The API is available at `http://localhost:8081`. The `local` profile runs the API, dispatcher and worker together. On first initialization of a fresh MySQL volume, Compose loads the schema, sample rows and SELECT-only application user from [the initialization script](docker/mysql/01-report-events.sql). Existing volumes retain their data.
 
-For an existing MongoDB or RabbitMQ server, configure the connection settings below. Neither server requires a native macOS installation when using the supplied containers.
+| Dependency | Local address | Local credentials |
+| --- | --- | --- |
+| MongoDB | `mongodb://localhost:27017/reporting` | No authentication in local Compose. |
+| RabbitMQ | AMQP: `localhost:5672`; [management UI](http://localhost:15672) | `reporting` / `reporting-local`; virtual host `reporting`. |
+| MySQL | `localhost:3306/reporting_source` | `report_reader` / `report-reader-local` (SELECT only). |
+| S3-compatible storage (SeaweedFS) | S3: `http://localhost:8333`; [file browser](http://localhost:8888) | Access key `reporting`; secret `reporting-local-storage`; bucket `reporting-exports`. |
 
-RabbitMQ's GUI is at [http://localhost:15672](http://localhost:15672). Sign in with username **reporting** and password **reporting-local**, select virtual host **reporting**, then open **Queues and Streams → reporting.reports.jobs** after submitting a report. The queue is declared when the application first connects to publish. With the worker enabled, messages are consumed and reports move through RUNNING to COMPLETED or FAILED. For payload inspection, select a requeue-enabled option under **Get messages**.
+These are local defaults. Configure service endpoints and credentials for your deployment. Published dependency ports and the local API bind to loopback.
 
-The full [milestone 2 guide](docs/job-dispatch.md) includes service checks, MongoDB inspection, outage/restart testing, logs, and shutdown commands.
+## Use the API
+
+| Method | Endpoint | Result |
+| --- | --- | --- |
+| POST | `/api/v1/reports` | Accept a job and return `202` with its `reportId` and status URL. |
+| GET | `/api/v1/reports/{reportId}` | Return status, timestamps and available result metadata. |
+| GET | `/api/v1/reports/{reportId}/download` | Return a signed URL after completion; otherwise `409`. |
+
+Submit a report for the sample data:
 
 ```sh
 curl -i http://localhost:8081/api/v1/reports \
@@ -32,100 +52,76 @@ curl -i http://localhost:8081/api/v1/reports \
   -d '{"startDate":"2026-10-01","endDate":"2026-10-02"}'
 ```
 
-The response is `202 Accepted`, with a `Location` header and a body like:
+Dates use UTC, with an inclusive start and exclusive end. This request selects October 1 and returns five rows from a fresh sample database. Requests allow up to 731 days.
 
-```json
-{
-  "reportId": "778048b2-3b55-4318-b8d1-a7dc4225bc2b",
-  "startDate": "2026-10-01",
-  "endDate": "2026-10-02",
-  "format": "CSV",
-  "status": "QUEUED",
-  "submittedAt": "2026-10-19T08:00:00Z",
-  "firstStartedAt": null,
-  "completedAt": null,
-  "attemptCount": 0,
-  "retryCount": 0,
-  "statusUrl": "/api/v1/reports/778048b2-3b55-4318-b8d1-a7dc4225bc2b",
-  "rowCount": null,
-  "byteSize": null,
-  "downloadUrl": null,
-  "failure": null
-}
-```
-
-Use the returned ID to retrieve the saved job:
+Use the returned `reportId`:
 
 ```sh
-curl -i http://localhost:8081/api/v1/reports/REPLACE_WITH_REPORT_ID
+REPORT_ID=REPLACE_WITH_REPORT_ID
+curl -s "http://localhost:8081/api/v1/reports/$REPORT_ID"
 ```
 
-The dispatcher normally publishes within a polling interval. In MongoDB, `dispatchPending` changes from `true` to `false` after a routed publication is confirmed, and `dispatch.publishedAt` is recorded. With an enabled worker, GET eventually reports `COMPLETED` with row count, byte size and a download endpoint. Without a worker, jobs remain `QUEUED`. Starting the updated application also dispatches pending jobs created during milestone 1.
+Poll until the status is `COMPLETED`, then request a download link:
 
-## Configuration
+```sh
+curl -s "http://localhost:8081/api/v1/reports/$REPORT_ID/download"
+```
 
-| Environment variable | Default | Purpose |
+Open the returned `downloadUrl` to download the CSV. The link expires after five minutes. A `FAILED` job includes a failure description.
+
+## Deployment roles and configuration
+
+The same JAR runs in three profiles:
+
+| Profile | Runs | Usage |
 | --- | --- | --- |
-| `MONGODB_URI` | `mongodb://localhost:27017/reporting?serverSelectionTimeoutMS=3000&connectTimeoutMS=2000&socketTimeoutMS=10000` | Metadata connection and driver deadlines. |
-| `PORT` | `8081` | HTTP port for API/local roles. The worker role has no HTTP server. |
-| `REPORT_MAX_RANGE_DAYS` | `731` | Maximum number of days in the requested half-open interval. Must be positive. |
-| `RABBITMQ_HOST` / `RABBITMQ_PORT` | `localhost` / `5672` | AMQP broker address. Port 15672 is for the management UI. |
-| `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `reporting` / `reporting-local` | Local development credentials. |
-| `RABBITMQ_VHOST` | `reporting` | Broker virtual host created by Compose. |
-| `SPRING_PROFILES_ACTIVE` | `api` when unset | Choose one role: `api`, `worker`, or `local`. See the [role guide](docs/deployment-roles.md). |
-| `REPORT_DISPATCH_ENABLED` | `true` in base settings | Legacy base setting; named role profiles select dispatch and worker activation together. |
-| `REPORT_DISPATCH_POLL_INTERVAL` | `1s` | Delay between completed polling cycles. |
-| `REPORT_DISPATCH_LEASE_DURATION` | `30s` | Duration of a dispatch claim before another instance can reclaim it. |
-| `REPORT_DISPATCH_CONFIRM_TIMEOUT` | `5s` | Maximum wait for a broker confirmation after sending. Must be shorter than the lease. |
-| `REPORT_DISPATCH_RETRY_DELAY` | `5s` | Minimum delay before retrying a failed publication. |
-| `REPORT_DISPATCH_BATCH_SIZE` | `10` | Maximum jobs processed sequentially per polling cycle, from 1 to 100. |
-| `REPORT_DISPATCH_EXCHANGE` | `reporting.reports` | Durable direct exchange. |
-| `REPORT_DISPATCH_QUEUE` | `reporting.reports.jobs` | Durable job queue. |
-| `REPORT_DISPATCH_ROUTING_KEY` | `report.requested` | Routing key binding the exchange to the queue. |
+| `api` (default) | HTTP API and pending-job dispatcher. | Two request-serving instances. |
+| `worker` | One consumer and one MySQL reader; no HTTP server. | One report-generation instance. |
+| `local` | API, dispatcher and worker together. | Local development. |
 
-The application enforces majority write acknowledgement, journaling, and a five-second write-concern timeout, including when a custom MongoDB URI is supplied.
+Build once, then run each command in a separate terminal:
 
-Dates use `YYYY-MM-DD`. `startDate` is inclusive and `endDate` is exclusive; both boundaries are interpreted as midnight UTC. The example exports October 1 only. Output format is fixed to CSV. Additional JSON fields are rejected.
+```sh
+./mvnw clean package
+```
 
-## Verification
+```sh
+java -jar target/reporting-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=api --server.port=8081
+```
 
-Service, MVC, publisher, dispatcher, and configuration tests run without external services:
+```sh
+java -jar target/reporting-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=api --server.port=8082
+```
+
+```sh
+java -jar target/reporting-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=worker
+```
+
+Stop the combined `local` process before using this layout. Choose one profile per process and deploy one worker copy; each additional worker adds another database reader. No distributed query limit is implemented.
+
+Connection settings and limits are in [application.yaml](src/main/resources/application.yaml). Role profiles control dispatcher/worker activation. Common environment overrides are `MONGODB_URI`, `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`, `RABBITMQ_VHOST`, `REPORT_MYSQL_URL`, `REPORT_MYSQL_USERNAME`, `REPORT_MYSQL_PASSWORD`, and `REPORT_S3_*`. Use `PORT` to change the API port. For an API on a separate host, set `SERVER_ADDRESS=0.0.0.0` and configure shared dependency endpoints and a storage URL reachable by download clients. With AWS S3, clear `reporting.storage.endpoint` and configure the bucket, region, credentials and addressing style.
+
+## Tests and shutdown
+
+Unit/MVC tests run without external dependencies:
 
 ```sh
 ./mvnw clean test
 ```
 
-Integration tests require MongoDB, RabbitMQ, MySQL and the S3-compatible store and start application instances on ephemeral HTTP ports:
+Integration tests require the Compose dependencies and the dedicated sample MySQL database. They temporarily modify source data, so use a local test environment:
 
 ```sh
-docker compose up -d --wait mongo rabbitmq mysql storage
 ./mvnw -Pintegration clean verify
 ```
 
-They cover two API instances sharing one headless worker, role isolation, milestone 1 behavior, competing claims, stale owners, delayed publication retries, legacy document compatibility, persistent messages, unroutable returns, broker outage recovery, two API instances sharing dispatch work, and the duplicate-delivery window after a crash. Tests own unique databases, exchanges, and queues; they do not purge application queues. `MONGODB_TEST_ADDRESS` overrides `localhost:27017`. RabbitMQ overrides are `RABBITMQ_TEST_HOST`, `RABBITMQ_TEST_PORT`, `RABBITMQ_TEST_USERNAME`, `RABBITMQ_TEST_PASSWORD`, and `RABBITMQ_TEST_VHOST`, with defaults matching Compose.
+Stop the application with Ctrl+C, then stop dependencies while retaining their data:
 
-## Package layout
+```sh
+docker compose stop
+colima stop
+```
 
-Production classes live under `com.akash.reporting`:
+## Current boundaries
 
-| Package | Responsibility |
-| --- | --- |
-| `controller` | HTTP endpoints. |
-| `dto` | API request/response objects and the queue message contract. |
-| `model` | Persistent report and dispatch metadata. |
-| `repository` | Job persistence, atomic dispatch claims, and guarded updates. |
-| `service` | Submission, dispatch, worker lifecycle and downloading. |
-| `export` | Bounded CSV writing. |
-| `storage` | S3 multipart uploads, cleanup and signed URLs. |
-| `messaging` | Persistent publication, confirms/returns and manual-ack consumption. |
-| `scheduler` | Periodic dispatch trigger. |
-| `config` | Validated settings, UTC clock, write concerns, and broker topology. |
-| `exception` | Application exceptions and HTTP error mapping. |
-
-## Milestone 3 review and testing
-
-Follow [the generation guide](docs/report-generation.md) to submit the seeded October 1 report (five rows), poll completion, fetch a signed download URL, and inspect MySQL/MongoDB/RabbitMQ/stored files. Additional configuration is documented there. Tests use the dedicated local source fixture; do not run worker integration tests against a shared source database.
-
-## Next milestone
-
-Milestone 4 adds durable checkpoints/resume, bounded delayed worker retries, DLQ handling, and reconciliation/cleanup for abandoned attempts. Global query coordination and fairness follow. Authentication and ownership remain required before exposing this local development API.
+The service assumes source rows stay unchanged during an export. A worker restart begins a new attempt from the start. Authentication, report ownership, automatic file retention, delayed worker retries and dead-letter handling are not implemented. Query batching limits concurrent work; it does not enforce the database's available 20%/60% capacity. Performance at the full 200-million-row scale remains to be validated on representative hardware and foreground traffic.

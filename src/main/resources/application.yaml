@@ -1,6 +1,6 @@
 spring:
   profiles:
-    default: api
+    default: api # Use api, worker, or local to select the process role.
   application:
     name: reporting-service
   mongodb:
@@ -25,8 +25,9 @@ server:
 reporting:
   reports:
     max-range-days: ${REPORT_MAX_RANGE_DAYS:731}
+
+  # The role profiles control dispatch and worker activation.
   dispatch:
-    enabled: ${REPORT_DISPATCH_ENABLED:true}
     poll-interval: ${REPORT_DISPATCH_POLL_INTERVAL:1s}
     lease-duration: ${REPORT_DISPATCH_LEASE_DURATION:30s}
     confirm-timeout: ${REPORT_DISPATCH_CONFIRM_TIMEOUT:5s}
@@ -36,8 +37,8 @@ reporting:
     queue: ${REPORT_DISPATCH_QUEUE:reporting.reports.jobs}
     routing-key: ${REPORT_DISPATCH_ROUTING_KEY:report.requested}
 
+  # Read source rows in bounded pages using a SELECT-only account.
   worker:
-    enabled: ${REPORT_WORKER_ENABLED:false}
     batch-size: ${REPORT_WORKER_BATCH_SIZE:500}
     lease-duration: 60s
     heartbeat-interval: 10s
@@ -46,6 +47,8 @@ reporting:
     jdbc-url: ${REPORT_MYSQL_URL:jdbc:mysql://localhost:3306/reporting_source}
     username: ${REPORT_MYSQL_USERNAME:report_reader}
     password: ${REPORT_MYSQL_PASSWORD:report-reader-local}
+
+  # S3-compatible storage for completed CSVs and temporary download links.
   storage:
     endpoint: ${REPORT_S3_ENDPOINT:http://localhost:8333}
     region: ${REPORT_S3_REGION:us-east-1}
@@ -53,6 +56,6 @@ reporting:
     access-key: ${REPORT_S3_ACCESS_KEY:reporting}
     secret-key: ${REPORT_S3_SECRET_KEY:reporting-local-storage}
     path-style: ${REPORT_S3_PATH_STYLE:true}
-    part-size-bytes: 8388608
-    max-output-bytes: ${REPORT_MAX_OUTPUT_BYTES:53687091200}
+    part-size-bytes: 8388608 # 8 MiB multipart buffer
+    max-output-bytes: ${REPORT_MAX_OUTPUT_BYTES:53687091200} # 50 GiB per report
     download-ttl: 5m

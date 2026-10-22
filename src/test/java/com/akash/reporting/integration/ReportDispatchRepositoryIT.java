@@ -115,7 +115,7 @@ class ReportDispatchRepositoryIT {
     }
 
     @Test
-    void milestoneOneDocumentsRemainReadableAndDispatchableAfterPackageChanges() {
+    void legacyDocumentsRemainReadableAndDispatchableAfterPackageChanges() {
         String id = UUID.randomUUID().toString();
         mongo.getCollection("report_jobs").insertOne(new Document("_id", id)
                 .append("_class", "com.akash.reporting.report.ReportJob")
