@@ -193,7 +193,7 @@ class ReportDispatchIT {
 
     private ConfigurableApplicationContext startApplication(int port, String pollInterval) {
         var application = new SpringApplicationBuilder(ReportingServiceApplication.class).run(
-                "--server.port=0", "--spring.mongodb.uri=" + mongoUri,
+                "--spring.profiles.active=api", "--server.port=0", "--spring.mongodb.uri=" + mongoUri,
                 "--spring.rabbitmq.host=" + rabbitHost, "--spring.rabbitmq.port=" + port,
                 "--spring.rabbitmq.username=" + rabbitUser, "--spring.rabbitmq.password=" + rabbitPassword,
                 "--spring.rabbitmq.virtual-host=" + rabbitVhost, "--spring.rabbitmq.connection-timeout=250ms",

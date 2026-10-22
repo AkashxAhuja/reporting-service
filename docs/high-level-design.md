@@ -64,6 +64,8 @@ Assumptions: asynchronous delivery is acceptable; the initial report exports kno
 
 ## Database protection and instance allocation
 
+The [deployment profiles](deployment-roles.md) make these roles explicit using the same JAR: `api` handles HTTP and dispatch, `worker` generates reports without an HTTP server, and `local` combines them for development. A plain startup uses `api`.
+
 Start with **two API instances and one worker instance**, with a single active report query and low message prefetch. API replicas share pending-dispatch work through MongoDB leases. The fourth instance can host another worker only when measurements justify the additional database load and a shared limit caps active queries across all workers. Adding API replicas must not increase the number of MySQL report queries.
 
 Use a small reporting connection pool, query deadlines, admission limits on outstanding jobs, and bounded upload buffers. Validate a date-based index against representative filters and data distributions; an index does not make a report that returns most of the table cheap. Observe queue depth and oldest-job age, active queries, query duration, database CPU and I/O, worker memory, retries, and report completion times.

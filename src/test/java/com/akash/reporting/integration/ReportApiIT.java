@@ -134,7 +134,7 @@ class ReportApiIT {
 
     private void startApplication(String uri) {
         application = new SpringApplicationBuilder(ReportingServiceApplication.class).run(
-                "--server.port=0", "--reporting.dispatch.enabled=false", "--spring.mongodb.uri=" + uri, "--spring.main.banner-mode=off");
+                "--spring.profiles.active=api", "--server.port=0", "--reporting.dispatch.enabled=false", "--spring.mongodb.uri=" + uri, "--spring.main.banner-mode=off");
         int port = ((WebServerApplicationContext) application).getWebServer().getPort();
         baseUrl = "http://127.0.0.1:" + port;
     }

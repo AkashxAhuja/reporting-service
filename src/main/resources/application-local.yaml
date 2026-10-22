@@ -1,0 +1,6 @@
+# A single process for local development: HTTP API, dispatcher, and worker.
+reporting:
+  dispatch:
+    enabled: true
+  worker:
+    enabled: true

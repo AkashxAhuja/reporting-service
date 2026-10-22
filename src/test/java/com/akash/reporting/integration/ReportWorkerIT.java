@@ -39,7 +39,7 @@ class ReportWorkerIT {
         String s3Port = System.getenv().getOrDefault("S3_TEST_PORT", "8333");
         jdbcUrl = "jdbc:mysql://127.0.0.1:" + mysqlPort + "/reporting_source";
         application = new SpringApplicationBuilder(ReportingServiceApplication.class).run(
-                "--server.port=0", "--spring.main.banner-mode=off",
+                "--spring.profiles.active=local", "--server.port=0", "--spring.main.banner-mode=off",
                 "--spring.mongodb.uri=mongodb://" + mongo + "/worker_it_" + suffix,
                 "--spring.rabbitmq.host=" + System.getenv().getOrDefault("RABBITMQ_TEST_HOST", "localhost"),
                 "--spring.rabbitmq.port=" + System.getenv().getOrDefault("RABBITMQ_TEST_PORT", "5672"),

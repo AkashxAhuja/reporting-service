@@ -1,0 +1,6 @@
+# Request handling and durable dispatch. No RabbitMQ consumer or MySQL reader pool.
+reporting:
+  dispatch:
+    enabled: true
+  worker:
+    enabled: false

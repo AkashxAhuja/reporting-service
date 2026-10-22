@@ -75,14 +75,14 @@ cd /Users/akash/GitWorkspace/reporting-service
 ./mvnw clean spring-boot:run
 ```
 
-Leave that terminal running. The dispatcher is enabled by default and also picks up older pending milestone 1 jobs. For metadata-only operation, use `REPORT_DISPATCH_ENABLED=false ./mvnw clean spring-boot:run`.
+Leave that terminal running. The dispatcher is enabled by default and also picks up older pending milestone 1 jobs. For metadata-only operation, use `./mvnw clean spring-boot:run -Dspring-boot.run.arguments=--reporting.dispatch.enabled=false`. Named deployment roles are described in [the role guide](deployment-roles.md).
 
 ## Test acceptance, publication, and lookup
 
 In a second terminal:
 
 ```sh
-curl -i http://localhost:8080/api/v1/reports \
+curl -i http://localhost:8081/api/v1/reports \
   -H 'Content-Type: application/json' \
   -d '{"startDate":"2026-10-01","endDate":"2026-10-02"}'
 ```
@@ -90,7 +90,7 @@ curl -i http://localhost:8080/api/v1/reports \
 Expect `202 Accepted`. Copy the returned report ID, then run:
 
 ```sh
-curl -i http://localhost:8080/api/v1/reports/REPLACE_WITH_REPORT_ID
+curl -i http://localhost:8081/api/v1/reports/REPLACE_WITH_REPORT_ID
 ```
 
 Expect `200` and `QUEUED`. The Postman workspace remains outside the repository under `/Users/akash/GitWorkspace/postman`; its existing create/get requests still work.
@@ -157,11 +157,11 @@ With no worker consuming and no new submissions, queued messages should remain a
 
 ## Test two application instances
 
-With the first application still listening on 8080, start another terminal:
+With the first application still listening on 8081, start another terminal:
 
 ```sh
 cd /Users/akash/GitWorkspace/reporting-service
-PORT=8081 ./mvnw spring-boot:run
+PORT=8082 ./mvnw spring-boot:run -Dspring-boot.run.profiles=api
 ```
 
 Submit through either port. Both instances share MongoDB claims and the same RabbitMQ queue. Integration tests check this path and explicitly test that an expired owner's updates cannot alter a replacement claim.

@@ -13,21 +13,21 @@ cd /Users/akash/GitWorkspace/reporting-service
 docker compose pull
 docker compose up -d --wait mongo rabbitmq mysql storage
 docker compose ps
-REPORT_WORKER_ENABLED=true ./mvnw clean spring-boot:run
+./mvnw clean spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 The first MySQL start creates `reporting_source.report_events`, eight fixture rows and a SELECT-only `report_reader` account. Initialization runs only for a fresh MySQL volume. Existing MongoDB and RabbitMQ volumes are retained. The object store creates the private `reporting-exports` bucket. The image versions are pinned in Compose.
 
 SeaweedFS supplies local S3 storage. MinIO's previously published images were unavailable when this milestone was implemented. The Java storage implementation uses the AWS S3 SDK and an endpoint override, so it can also target a provisioned S3 bucket. Local credentials below are development defaults.
 
-The API binds to `127.0.0.1:8080`; every published container port binds to loopback. Worker processing defaults to disabled. Use the command above for one combined API/dispatcher/worker locally. Additional API processes must leave `REPORT_WORKER_ENABLED` unset. This milestone supports one enabled worker deployment; it does not enforce a cluster-wide MySQL concurrency permit.
+The local role API binds to `127.0.0.1:8081`; every published container port binds to loopback. A plain startup selects the `api` role, which does not generate reports. `local` enables the API, dispatcher and one worker in the same process for development. For separate instances, select `api` on two copies and `worker` on exactly one copy, as shown in the [deployment roles guide](deployment-roles.md). The worker role starts no HTTP server and does not dispatch jobs. These profiles select configuration; they do not enforce a cluster-wide query permit.
 
 ## Test the full flow
 
 1. Submit the seeded day. The start is inclusive and end exclusive, both UTC.
 
 ```sh
-curl -i -X POST http://localhost:8080/api/v1/reports \
+curl -i -X POST http://localhost:8081/api/v1/reports \
   -H 'Content-Type: application/json' \
   -d '{"startDate":"2026-10-01","endDate":"2026-10-02"}'
 ```
@@ -36,7 +36,7 @@ curl -i -X POST http://localhost:8080/api/v1/reports \
 
 ```sh
 REPORT_ID='paste-the-reportId-here'
-curl -sS "http://localhost:8080/api/v1/reports/$REPORT_ID"
+curl -sS "http://localhost:8081/api/v1/reports/$REPORT_ID"
 ```
 
 Expected: `rowCount: 5`, `attemptCount: 1`, start/completion timestamps, `byteSize`, and a relative `downloadUrl`. The CSV contains IDs 2–6 in order, including two equal timestamps, quotes, a comma, an embedded newline and Unicode. IDs 1 and 7 are outside this date range. A date range such as October 10–11 returns a header-only CSV and row count zero.
@@ -44,7 +44,7 @@ Expected: `rowCount: 5`, `attemptCount: 1`, start/completion timestamps, `byteSi
 3. Request a signed URL, then download it. The API response is JSON; it does not redirect automatically.
 
 ```sh
-curl -sS "http://localhost:8080/api/v1/reports/$REPORT_ID/download"
+curl -sS "http://localhost:8081/api/v1/reports/$REPORT_ID/download"
 ```
 
 Copy the complete `downloadUrl` from that JSON response:
@@ -78,13 +78,25 @@ docker compose exec rabbitmq rabbitmqctl list_queues -p reporting \
   name messages_ready messages_unacknowledged consumers
 ```
 
-For a separate worker process after starting the API normally:
+To run separate API and worker processes, build the JAR once:
 
 ```sh
-PORT=8081 REPORT_WORKER_ENABLED=true REPORT_DISPATCH_ENABLED=false ./mvnw spring-boot:run
+./mvnw clean package
 ```
 
-Run exactly one enabled worker. A worker-only process still exposes the API on its chosen port for this milestone.
+Then run these commands in separate terminals from the project folder:
+
+```sh
+# API process, port 8081; accepts requests and dispatches jobs.
+java -jar target/reporting-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=api
+```
+
+```sh
+# Worker process; generates reports and has no HTTP port.
+java -jar target/reporting-service-0.0.1-SNAPSHOT.jar --spring.profiles.active=worker
+```
+
+Stop the combined local process before switching to this arrangement. Run exactly one `worker` copy and no `local` copy alongside it.
 
 ## Implementation and limits
 
@@ -147,7 +159,8 @@ Rows are assumed immutable for the export duration. Keyset pagination is not a t
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
-| `REPORT_WORKER_ENABLED` | `false` | Enable one local worker explicitly. |
+| `SPRING_PROFILES_ACTIVE` | `api` when unset | `api`: HTTP + dispatch; `worker`: generation without HTTP; `local`: combined development process. |
+| `REPORT_WORKER_ENABLED` | `false` in base settings | Legacy base setting. Select a named profile for normal startup; its role settings take precedence. |
 | `REPORT_WORKER_BATCH_SIZE` | `500` | Rows per query, 1–5000. |
 | `REPORT_WORKER_MAX_DURATION` | `10m` | Execution deadline, at most 15m. |
 | `REPORT_MYSQL_URL` | `jdbc:mysql://localhost:3306/reporting_source` | Reader database. |

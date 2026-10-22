@@ -1,0 +1,10 @@
+# Run one copy of this role. It consumes jobs and does not start an HTTP server.
+spring:
+  main:
+    web-application-type: none
+
+reporting:
+  dispatch:
+    enabled: false
+  worker:
+    enabled: true

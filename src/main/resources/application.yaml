@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    default: api
   application:
     name: reporting-service
   mongodb:
@@ -35,7 +37,7 @@ reporting:
     routing-key: ${REPORT_DISPATCH_ROUTING_KEY:report.requested}
 
   worker:
-    enabled: ${REPORT_WORKER_ENABLED:true}
+    enabled: ${REPORT_WORKER_ENABLED:false}
     batch-size: ${REPORT_WORKER_BATCH_SIZE:500}
     lease-duration: 60s
     heartbeat-interval: 10s

@@ -15,10 +15,10 @@ colima start --runtime docker --vm-type vz --cpu 2 --memory 4 --disk 20
 docker context use colima
 docker compose pull
 docker compose up -d --wait mongo rabbitmq mysql storage
-REPORT_WORKER_ENABLED=true ./mvnw clean spring-boot:run
+./mvnw clean spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-The API listens on `127.0.0.1:8080`. MongoDB, RabbitMQ, MySQL and SeaweedFS expose their ports only on loopback and use named volumes. Worker processing defaults to disabled; enable exactly one local worker with the command above. Stopping containers or running `docker compose down` preserves their volumes. The clean build removes stale classes from the milestone 1 package layout. Stop the old application process before starting the updated application.
+The API in the local role listens on `127.0.0.1:8081`. MongoDB, RabbitMQ, MySQL and SeaweedFS expose their ports only on loopback and use named volumes. A plain startup defaults to the `api` role with generation disabled. The command above selects `local`, which runs one API, dispatcher and worker together. For separate instances, use the [deployment roles guide](docs/deployment-roles.md). Stopping containers or running `docker compose down` preserves their volumes. The clean build removes stale classes from the milestone 1 package layout. Stop the old application process before starting the updated application.
 
 For an existing MongoDB or RabbitMQ server, configure the connection settings below. Neither server requires a native macOS installation when using the supplied containers.
 
@@ -27,7 +27,7 @@ RabbitMQ's GUI is at [http://localhost:15672](http://localhost:15672). Sign in w
 The full [milestone 2 guide](docs/job-dispatch.md) includes service checks, MongoDB inspection, outage/restart testing, logs, and shutdown commands.
 
 ```sh
-curl -i http://localhost:8080/api/v1/reports \
+curl -i http://localhost:8081/api/v1/reports \
   -H 'Content-Type: application/json' \
   -d '{"startDate":"2026-10-01","endDate":"2026-10-02"}'
 ```
@@ -57,7 +57,7 @@ The response is `202 Accepted`, with a `Location` header and a body like:
 Use the returned ID to retrieve the saved job:
 
 ```sh
-curl -i http://localhost:8080/api/v1/reports/REPLACE_WITH_REPORT_ID
+curl -i http://localhost:8081/api/v1/reports/REPLACE_WITH_REPORT_ID
 ```
 
 The dispatcher normally publishes within a polling interval. In MongoDB, `dispatchPending` changes from `true` to `false` after a routed publication is confirmed, and `dispatch.publishedAt` is recorded. With an enabled worker, GET eventually reports `COMPLETED` with row count, byte size and a download endpoint. Without a worker, jobs remain `QUEUED`. Starting the updated application also dispatches pending jobs created during milestone 1.
@@ -67,12 +67,13 @@ The dispatcher normally publishes within a polling interval. In MongoDB, `dispat
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
 | `MONGODB_URI` | `mongodb://localhost:27017/reporting?serverSelectionTimeoutMS=3000&connectTimeoutMS=2000&socketTimeoutMS=10000` | Metadata connection and driver deadlines. |
-| `PORT` | `8080` | HTTP port. |
+| `PORT` | `8081` | HTTP port for API/local roles. The worker role has no HTTP server. |
 | `REPORT_MAX_RANGE_DAYS` | `731` | Maximum number of days in the requested half-open interval. Must be positive. |
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` | `localhost` / `5672` | AMQP broker address. Port 15672 is for the management UI. |
 | `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `reporting` / `reporting-local` | Local development credentials. |
 | `RABBITMQ_VHOST` | `reporting` | Broker virtual host created by Compose. |
-| `REPORT_DISPATCH_ENABLED` | `true` | Enable the dispatcher; `false` disables publication; worker activation is controlled separately. |
+| `SPRING_PROFILES_ACTIVE` | `api` when unset | Choose one role: `api`, `worker`, or `local`. See the [role guide](docs/deployment-roles.md). |
+| `REPORT_DISPATCH_ENABLED` | `true` in base settings | Legacy base setting; named role profiles select dispatch and worker activation together. |
 | `REPORT_DISPATCH_POLL_INTERVAL` | `1s` | Delay between completed polling cycles. |
 | `REPORT_DISPATCH_LEASE_DURATION` | `30s` | Duration of a dispatch claim before another instance can reclaim it. |
 | `REPORT_DISPATCH_CONFIRM_TIMEOUT` | `5s` | Maximum wait for a broker confirmation after sending. Must be shorter than the lease. |
@@ -101,7 +102,7 @@ docker compose up -d --wait mongo rabbitmq mysql storage
 ./mvnw -Pintegration clean verify
 ```
 
-They cover milestone 1 behavior, competing claims, stale owners, delayed publication retries, legacy document compatibility, persistent messages, unroutable returns, broker outage recovery, two API instances sharing dispatch work, and the duplicate-delivery window after a crash. Tests own unique databases, exchanges, and queues; they do not purge application queues. `MONGODB_TEST_ADDRESS` overrides `localhost:27017`. RabbitMQ overrides are `RABBITMQ_TEST_HOST`, `RABBITMQ_TEST_PORT`, `RABBITMQ_TEST_USERNAME`, `RABBITMQ_TEST_PASSWORD`, and `RABBITMQ_TEST_VHOST`, with defaults matching Compose.
+They cover two API instances sharing one headless worker, role isolation, milestone 1 behavior, competing claims, stale owners, delayed publication retries, legacy document compatibility, persistent messages, unroutable returns, broker outage recovery, two API instances sharing dispatch work, and the duplicate-delivery window after a crash. Tests own unique databases, exchanges, and queues; they do not purge application queues. `MONGODB_TEST_ADDRESS` overrides `localhost:27017`. RabbitMQ overrides are `RABBITMQ_TEST_HOST`, `RABBITMQ_TEST_PORT`, `RABBITMQ_TEST_USERNAME`, `RABBITMQ_TEST_PASSWORD`, and `RABBITMQ_TEST_VHOST`, with defaults matching Compose.
 
 ## Package layout
 
