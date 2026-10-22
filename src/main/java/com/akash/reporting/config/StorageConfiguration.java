@@ -18,7 +18,9 @@ public class StorageConfiguration {
         var builder = S3Client.builder().region(Region.of(properties.region()))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(properties.accessKey(), properties.secretKey())))
-                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(properties.pathStyle()).build())
+                // Parts already have a known length; avoid signed chunk framing on S3-compatible endpoints.
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(properties.pathStyle())
+                        .chunkedEncodingEnabled(false).build())
                 .httpClientBuilder(UrlConnectionHttpClient.builder().connectionTimeout(Duration.ofSeconds(3))
                         .socketTimeout(Duration.ofSeconds(30)))
                 .overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(45))
