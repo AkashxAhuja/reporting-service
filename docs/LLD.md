@@ -91,14 +91,14 @@ sequenceDiagram
     Q-->>D: Routed publication confirmed
     D->>M: Clear pending flag
     Q->>W: Deliver reportId
-    W->>M: Claim attempt; set RUNNING
+    W->>M: Claim attempt, set RUNNING
     loop Until no rows remain
         W->>DB: Read next timestamp/ID page
         DB-->>W: Bounded batch
         W->>S: Upload parts as the buffer fills
     end
     W->>S: Complete multipart upload
-    W->>M: Save artifact; set COMPLETED
+    W->>M: Save artifact, set COMPLETED
     W->>Q: Acknowledge delivery
     C->>A: GET status, then download endpoint
     A->>M: Read completed job
